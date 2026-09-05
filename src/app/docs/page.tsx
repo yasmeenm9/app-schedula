@@ -31,41 +31,68 @@ export default function PatientDocsPage() {
 
   // Base hardcoded doctors
   const defaultDoctors: Doctor[] = [
-    { id: 'doc-1', name: 'Dr. Alex Smith', specialty: 'Cardiology', fee: 500, slots: ['10:00 AM', '11:30 AM', '02:00 PM'] },
     { id: 'doc-2', name: 'Dr. Sarah Jenkins', specialty: 'Dermatology', fee: 400, slots: ['09:30 AM', '01:00 PM', '04:30 PM'] },
     { id: 'doc-3', name: 'Dr. Robert Chen', specialty: 'Pediatrics', fee: 600, slots: ['11:00 AM', '03:00 PM', '05:00 PM'] },
   ];
 
   useEffect(() => {
+    // 1. Load patient account info gracefully
     const saved = localStorage.getItem('patientAccount');
     if (saved) {
-      const data = JSON.parse(saved);
-      if (data.fullName) setPatientName(data.fullName);
-    }
-
-    // Load existing appointments
-    const storedAppointments = JSON.parse(localStorage.getItem('doctorAppointments') || '[]');
-    setMyAppointments(storedAppointments);
-
-    // Load newly registered doctor from signup/profile if available
-    const savedDoctorAccount = localStorage.getItem('doctorAccount');
-    if (savedDoctorAccount) {
-      const docData = JSON.parse(savedDoctorAccount);
-      if (docData.fullName) {
-        const dynamicDoctor: Doctor = {
-          id: 'doc-registered',
-          name: docData.fullName,
-          specialty: docData.specialty || 'General Medicine',
-          fee: Number(docData.fee) || 500,
-          slots: ['10:00 AM', '02:00 PM', '04:00 PM'], // Default open slots for new signups
-        };
-        // Combine hardcoded + newly registered doctor
-        setDoctorsList([...defaultDoctors, dynamicDoctor]);
-        return;
+      try {
+        const data = JSON.parse(saved);
+        if (data.fullName) setPatientName(data.fullName);
+      } catch (e) {
+        console.error('Failed to parse patient account', e);
       }
     }
 
-    setDoctorsList(defaultDoctors);
+    // 2. Load existing appointments
+    const storedAppointments = JSON.parse(localStorage.getItem('doctorAppointments') || '[]');
+    setMyAppointments(storedAppointments);
+
+    // 3. Robustly load registered doctors from all possible storage formats
+    let loadedDynamicDoctors: Doctor[] = [];
+
+    const savedDoctorsArray = localStorage.getItem('registeredDoctors') || localStorage.getItem('allDoctors') || localStorage.getItem('doctorsList');
+    if (savedDoctorsArray) {
+      try {
+        const parsedArray = JSON.parse(savedDoctorsArray);
+        if (Array.isArray(parsedArray)) {
+          loadedDynamicDoctors = parsedArray.map((doc: any, idx: number) => ({
+            id: doc.id || `doc-reg-${idx}`,
+            name: doc.fullName || doc.name,
+            specialty: doc.specialty || 'General Medicine',
+            fee: Number(doc.fee) || 500,
+            slots: doc.slots || ['10:00 AM', '02:00 PM', '04:00 PM'],
+          }));
+        }
+      } catch (e) {
+        console.error('Failed to parse doctors array', e);
+      }
+    }
+
+    if (loadedDynamicDoctors.length === 0) {
+      const savedDoctorAccount = localStorage.getItem('doctorAccount');
+      if (savedDoctorAccount) {
+        try {
+          const docData = JSON.parse(savedDoctorAccount);
+          if (docData.fullName || docData.name) {
+            loadedDynamicDoctors.push({
+              id: 'doc-registered',
+              name: docData.fullName || docData.name,
+              specialty: docData.specialty || 'General Medicine',
+              fee: Number(docData.fee) || 500,
+              slots: docData.slots || ['10:00 AM', '02:00 PM', '04:00 PM'],
+            });
+          }
+        } catch (e) {
+          console.error('Failed to parse doctor account', e);
+        }
+      }
+    }
+
+    setDoctorsList([...defaultDoctors, ...loadedDynamicDoctors]);
   }, []);
 
   const handleBooking = () => {
@@ -107,9 +134,14 @@ export default function PatientDocsPage() {
             <h1 className="text-3xl font-black text-teal-400">Patient Booking Portal</h1>
             <p className="text-sm text-slate-400">Welcome, {patientName}. Choose a verified doctor and reserve your consultation slot.</p>
           </div>
-          <Link href="/" className="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-xl text-xs font-bold transition-all">
-            Sign Out
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link href="/patient/profile" className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-teal-300 rounded-xl text-xs font-bold transition-all border border-slate-700">
+              Profile
+            </Link>
+            <Link href="/" className="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-xl text-xs font-bold transition-all">
+              Sign Out
+            </Link>
+          </div>
         </div>
 
         {successMessage && (
@@ -118,7 +150,7 @@ export default function PatientDocsPage() {
           </div>
         )}
 
-        {/* Doctors Grid (Hardcoded + Dynamic Registered Doctors) */}
+        {/* Doctors Grid */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {doctorsList.map((doc) => (
             <div key={doc.id} className={`bg-slate-800/90 border p-6 rounded-2xl shadow-xl flex flex-col justify-between transition-all ${selectedDoctor === doc.id ? 'border-teal-400 ring-2 ring-teal-500/40' : 'border-slate-700'}`}>

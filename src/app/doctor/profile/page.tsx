@@ -2,8 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 export default function DoctorProfilePage() {
+  const router = useRouter();
   const [profile, setProfile] = useState({
     fullName: 'Dr. Alex Smith',
     email: 'doctor@schedula.com',
@@ -18,11 +20,16 @@ export default function DoctorProfilePage() {
   const [savedMessage, setSavedMessage] = useState('');
 
   useEffect(() => {
+    localStorage.setItem('currentDoctorSession', 'true');
     const saved = localStorage.getItem('doctorAccount');
     if (saved) {
-      const data = JSON.parse(saved);
-      setProfile((prev) => ({ ...prev, ...data }));
-      if (data.slots) setSlots(data.slots);
+      try {
+        const data = JSON.parse(saved);
+        setProfile((prev) => ({ ...prev, ...data }));
+        if (data.slots) setSlots(data.slots);
+      } catch (e) {
+        console.error('Failed to parse doctor account', e);
+      }
     }
   }, []);
 
@@ -32,8 +39,15 @@ export default function DoctorProfilePage() {
 
   const handleSaveProfile = (e: React.FormEvent) => {
     e.preventDefault();
-    const updatedData = { ...profile, slots };
+    const updatedData = { ...profile, slots, name: profile.fullName };
+    
     localStorage.setItem('doctorAccount', JSON.stringify(updatedData));
+
+    const existingDocs = JSON.parse(localStorage.getItem('registeredDoctors') || '[]');
+    const filteredDocs = existingDocs.filter((d: any) => d.email !== profile.email);
+    const updatedDocsList = [{ id: 'doc-registered', ...updatedData }, ...filteredDocs];
+    localStorage.setItem('registeredDoctors', JSON.stringify(updatedDocsList));
+
     setSavedMessage('Profile and availability slots successfully updated!');
     setTimeout(() => setSavedMessage(''), 3000);
   };
@@ -43,13 +57,30 @@ export default function DoctorProfilePage() {
     const updatedSlots = [...slots, newSlot];
     setSlots(updatedSlots);
     setNewSlot('');
-    localStorage.setItem('doctorAccount', JSON.stringify({ ...profile, slots: updatedSlots }));
+    
+    const updatedData = { ...profile, slots: updatedSlots, name: profile.fullName };
+    localStorage.setItem('doctorAccount', JSON.stringify(updatedData));
+
+    const existingDocs = JSON.parse(localStorage.getItem('registeredDoctors') || '[]');
+    const filteredDocs = existingDocs.filter((d: any) => d.email !== profile.email);
+    localStorage.setItem('registeredDoctors', JSON.stringify([{ id: 'doc-registered', ...updatedData }, ...filteredDocs]));
   };
 
   const handleRemoveSlot = (slotToRemove: string) => {
     const updatedSlots = slots.filter((s) => s !== slotToRemove);
     setSlots(updatedSlots);
-    localStorage.setItem('doctorAccount', JSON.stringify({ ...profile, slots: updatedSlots }));
+
+    const updatedData = { ...profile, slots: updatedSlots, name: profile.fullName };
+    localStorage.setItem('doctorAccount', JSON.stringify(updatedData));
+
+    const existingDocs = JSON.parse(localStorage.getItem('registeredDoctors') || '[]');
+    const filteredDocs = existingDocs.filter((d: any) => d.email !== profile.email);
+    localStorage.setItem('registeredDoctors', JSON.stringify([{ id: 'doc-registered', ...updatedData }, ...filteredDocs]));
+  };
+
+  const handleSignOut = () => {
+    localStorage.removeItem('currentDoctorSession');
+    router.push('/login/doctor');
   };
 
   return (
@@ -62,9 +93,17 @@ export default function DoctorProfilePage() {
             <h1 className="text-3xl font-black text-teal-400">Doctor Profile & Slot Manager</h1>
             <p className="text-sm text-slate-400">Manage your professional credentials and active consultation availability.</p>
           </div>
-          <Link href="/doctor/dashboard" className="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-xl text-xs font-bold transition-all">
-            &larr; Dashboard
-          </Link>
+          <div className="flex items-center gap-3">
+            <Link href="/doctor/dashboard" className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-teal-300 rounded-xl text-xs font-bold transition-all border border-slate-700">
+              Dashboard
+            </Link>
+            <Link href="/doctor/appointments" className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-teal-300 rounded-xl text-xs font-bold transition-all border border-slate-700">
+              Appointments
+            </Link>
+            <button onClick={handleSignOut} className="px-4 py-2 bg-red-950/60 hover:bg-red-900 text-red-300 rounded-xl text-xs font-bold transition-all border border-red-800">
+              Sign Out
+            </button>
+          </div>
         </div>
 
         {savedMessage && (

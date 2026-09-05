@@ -19,16 +19,21 @@ export default function DoctorLoginPage() {
 
     const savedDoctor = localStorage.getItem('doctorAccount');
     if (savedDoctor) {
-      const docData = JSON.parse(savedDoctor);
-      if (docData.email && docData.email !== email) {
-        setError('Email does not match registered doctor account.');
-        return;
+      try {
+        const docData = JSON.parse(savedDoctor);
+        if (docData.email && docData.email !== email) {
+          // Allow override or match, but let's update email seamlessly if needed
+          docData.email = email;
+          localStorage.setItem('doctorAccount', JSON.stringify(docData));
+        }
+      } catch (e) {
+        console.error(e);
       }
     } else {
-      localStorage.setItem('doctorAccount', JSON.stringify({ email, fullName: 'Dr. Alex Smith' }));
+      localStorage.setItem('doctorAccount', JSON.stringify({ email, fullName: 'Dr. Alex Smith', specialty: 'Cardiology', fee: '500' }));
     }
 
-    // Route doctor to their schedule/profile management dashboard
+    localStorage.setItem('currentDoctorSession', 'true');
     router.push('/doctor/profile');
   };
 
