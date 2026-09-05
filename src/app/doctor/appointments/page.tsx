@@ -23,6 +23,7 @@ export default function DoctorAppointmentsPage() {
   // Prescription Modal State
   const [isRxModalOpen, setIsRxModalOpen] = useState(false);
   const [selectedAppForRx, setSelectedAppForRx] = useState<Appointment | null>(null);
+  const [isEditingRx, setIsEditingRx] = useState(false);
   const [diagnosis, setDiagnosis] = useState('');
   const [medicines, setMedicines] = useState('');
   const [instructions, setInstructions] = useState('');
@@ -68,7 +69,6 @@ export default function DoctorAppointmentsPage() {
 
     loadAppointments(doctorName);
 
-    // Notify patient
     const targetApp = updatedAll.find(a => a.id === id);
     if (targetApp) {
       const patientKey = `patientNotifications_${targetApp.patientName.trim().toLowerCase()}`;
@@ -84,9 +84,23 @@ export default function DoctorAppointmentsPage() {
 
   const openRxModal = (app: Appointment) => {
     setSelectedAppForRx(app);
-    setDiagnosis('');
-    setMedicines('');
-    setInstructions('');
+    
+    // Check if prescription actually exists in localStorage
+    const existingRxList = JSON.parse(localStorage.getItem('doctorPrescriptions') || '[]');
+    const found = existingRxList.find((rx: any) => rx.appointmentId === app.id);
+    
+    if (found) {
+      setIsEditingRx(true);
+      setDiagnosis(found.diagnosis || '');
+      setMedicines(found.medicines || '');
+      setInstructions(found.instructions || '');
+    } else {
+      setIsEditingRx(false);
+      setDiagnosis('');
+      setMedicines('');
+      setInstructions('');
+    }
+    
     setIsRxModalOpen(true);
   };
 
@@ -112,12 +126,12 @@ export default function DoctorAppointmentsPage() {
     const patientKey = `patientNotifications_${selectedAppForRx.patientName.trim().toLowerCase()}`;
     const patientNotifs = JSON.parse(localStorage.getItem(patientKey) || '[]');
     localStorage.setItem(patientKey, JSON.stringify([
-      { id: Date.now(), text: `New prescription issued by ${doctorName} for your completed appointment.`, date: new Date().toLocaleDateString(), read: false },
+      { id: Date.now(), text: `Prescription ${isEditingRx ? 'updated' : 'issued'} by ${doctorName} for your completed appointment.`, date: new Date().toLocaleDateString(), read: false },
       ...patientNotifs
     ]));
 
     setIsRxModalOpen(false);
-    setSuccessMsg(`Prescription successfully issued for ${selectedAppForRx.patientName}!`);
+    setSuccessMsg(`Prescription successfully ${isEditingRx ? 'updated' : 'issued'} for ${selectedAppForRx.patientName}!`);
     setTimeout(() => setSuccessMsg(''), 3000);
   };
 
@@ -222,44 +236,52 @@ export default function DoctorAppointmentsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-700/50">
-                  {filteredAppointments.map((app) => (
-                    <tr key={app.id} className="hover:bg-slate-900/40 transition-all">
-                      <td className="py-3.5 px-4 font-bold text-white">{app.patientName}</td>
-                      <td className="py-3.5 px-4 text-slate-300">{app.date}</td>
-                      <td className="py-3.5 px-4 text-slate-300">{app.time}</td>
-                      <td className="py-3.5 px-4">
-                        <span className={`inline-block px-2.5 py-1 text-xs font-bold rounded-lg ${
-                          app.status === 'Confirmed' ? 'bg-emerald-950 text-emerald-300 border border-emerald-800' :
-                          app.status === 'Completed' ? 'bg-blue-950 text-blue-300 border border-blue-800' :
-                          app.status === 'Cancelled' || app.status === 'Missed' ? 'bg-red-950 text-red-300 border border-red-800' :
-                          'bg-amber-950 text-amber-300 border border-amber-800'
-                        }`}>
-                          {app.status}
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-4 text-right space-x-2">
-                        {app.status === 'Pending' && (
-                          <>
-                            <button onClick={() => updateStatus(app.id, 'Confirmed')} className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg cursor-pointer">Confirm</button>
-                            <button onClick={() => updateStatus(app.id, 'Cancelled')} className="px-3 py-1 bg-red-950 hover:bg-red-900 text-red-300 border border-red-800 text-xs font-bold rounded-lg cursor-pointer">Decline</button>
-                            <button onClick={() => openRescheduleModal(app)} className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg cursor-pointer">Reschedule</button>
-                          </>
-                        )}
-                        {app.status === 'Confirmed' && (
-                          <>
-                            <button onClick={() => updateStatus(app.id, 'Completed')} className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg cursor-pointer">Complete</button>
-                            <button onClick={() => updateStatus(app.id, 'Missed')} className="px-3 py-1 bg-amber-950 hover:bg-amber-900 text-amber-300 border border-amber-800 text-xs font-bold rounded-lg cursor-pointer">Missed</button>
-                            <button onClick={() => openRescheduleModal(app)} className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg cursor-pointer">Reschedule</button>
-                          </>
-                        )}
-                        {app.status === 'Completed' && (
-                          <button onClick={() => openRxModal(app)} className="px-3 py-1 bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold rounded-lg cursor-pointer">
-                            Write Rx
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
+                  {filteredAppointments.map((app) => {
+                    // Check if prescription already exists for this appointment
+                    const hasRx = JSON.parse(localStorage.getItem('doctorPrescriptions') || '[]').some((rx: any) => rx.appointmentId === app.id);
+
+                    return (
+                      <tr key={app.id} className="hover:bg-slate-900/40 transition-all">
+                        <td className="py-3.5 px-4 font-bold text-white">{app.patientName}</td>
+                        <td className="py-3.5 px-4 text-slate-300">{app.date}</td>
+                        <td className="py-3.5 px-4 text-slate-300">{app.time}</td>
+                        <td className="py-3.5 px-4">
+                          <span className={`inline-block px-2.5 py-1 text-xs font-bold rounded-lg ${
+                            app.status === 'Confirmed' ? 'bg-emerald-950 text-emerald-300 border border-emerald-800' :
+                            app.status === 'Completed' ? 'bg-blue-950 text-blue-300 border border-blue-800' :
+                            app.status === 'Cancelled' || app.status === 'Missed' ? 'bg-red-950 text-red-300 border border-red-800' :
+                            'bg-amber-950 text-amber-300 border border-amber-800'
+                          }`}>
+                            {app.status}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4 text-right space-x-2">
+                          {app.status === 'Pending' && (
+                            <>
+                              <button onClick={() => updateStatus(app.id, 'Confirmed')} className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg cursor-pointer">Confirm</button>
+                              <button onClick={() => updateStatus(app.id, 'Cancelled')} className="px-3 py-1 bg-red-950 hover:bg-red-900 text-red-300 border border-red-800 text-xs font-bold rounded-lg cursor-pointer">Decline</button>
+                              <button onClick={() => openRescheduleModal(app)} className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg cursor-pointer">Reschedule</button>
+                            </>
+                          )}
+                          {app.status === 'Confirmed' && (
+                            <>
+                              <button onClick={() => updateStatus(app.id, 'Completed')} className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg cursor-pointer">Complete</button>
+                              <button onClick={() => updateStatus(app.id, 'Missed')} className="px-3 py-1 bg-amber-950 hover:bg-amber-900 text-amber-300 border border-amber-800 text-xs font-bold rounded-lg cursor-pointer">Missed</button>
+                              <button onClick={() => openRescheduleModal(app)} className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg cursor-pointer">Reschedule</button>
+                            </>
+                          )}
+                          {app.status === 'Completed' && (
+                            <button 
+                              onClick={() => openRxModal(app)} 
+                              className={`px-3 py-1 text-white text-xs font-bold rounded-lg cursor-pointer ${hasRx ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-teal-600 hover:bg-teal-700'}`}
+                            >
+                              {hasRx ? 'Edit Rx' : 'Write Rx'}
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -268,13 +290,15 @@ export default function DoctorAppointmentsPage() {
 
       </div>
 
-      {/* Prescription Writer Modal */}
+      {/* Prescription Writer / Editor Modal */}
       {isRxModalOpen && selectedAppForRx && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex justify-center items-center z-50 p-4">
           <div className="bg-slate-800 border border-slate-700 w-full max-w-lg p-6 rounded-2xl shadow-2xl space-y-6 relative">
             <div className="flex justify-between items-center border-b border-slate-700 pb-4">
               <div>
-                <h2 className="text-xl font-bold text-teal-400">Issue Digital Prescription</h2>
+                <h2 className="text-xl font-bold text-teal-400">
+                  {isEditingRx ? 'Edit Digital Prescription' : 'Issue Digital Prescription'}
+                </h2>
                 <p className="text-xs text-slate-400">Patient: {selectedAppForRx.patientName}</p>
               </div>
               <button onClick={() => setIsRxModalOpen(false)} className="text-slate-400 hover:text-white text-lg font-bold cursor-pointer">✕</button>
@@ -315,7 +339,9 @@ export default function DoctorAppointmentsPage() {
               </div>
               <div className="pt-2 flex gap-3">
                 <button type="button" onClick={() => setIsRxModalOpen(false)} className="w-1/2 py-3 bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold rounded-xl transition-all cursor-pointer">Cancel</button>
-                <button type="submit" className="w-1/2 py-3 bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold rounded-xl shadow-lg transition-all cursor-pointer">Save & Send Rx</button>
+                <button type="submit" className="w-1/2 py-3 bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold rounded-xl shadow-lg transition-all cursor-pointer">
+                  {isEditingRx ? 'Update Rx' : 'Save & Send Rx'}
+                </button>
               </div>
             </form>
           </div>
