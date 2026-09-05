@@ -17,19 +17,19 @@ export default function DoctorLoginPage() {
       return;
     }
 
-    const savedDoctor = localStorage.getItem('doctorAccount');
-    if (savedDoctor) {
-      const docData = JSON.parse(savedDoctor);
-      if (docData.email && docData.email !== email) {
-        setError('Email does not match registered doctor account.');
-        return;
-      }
-    } else {
-      localStorage.setItem('doctorAccount', JSON.stringify({ email, fullName: 'Dr. Alex Smith' }));
+    // Check against registered doctors database
+    const registered = JSON.parse(localStorage.getItem('registeredDoctors') || '[]');
+    const foundDoc = registered.find((d: any) => d.email?.trim().toLowerCase() === email.trim().toLowerCase());
+
+    if (!foundDoc) {
+      setError('No registered doctor account found with this email. Please register first.');
+      return;
     }
 
-    // Route doctor to their schedule/profile management dashboard
-    router.push('/doctor/profile');
+    // Set current active session and account uniquely
+    localStorage.setItem('currentDoctorSession', 'true');
+    localStorage.setItem('doctorAccount', JSON.stringify(foundDoc));
+    router.push('/doctor/dashboard');
   };
 
   return (

@@ -10,7 +10,6 @@ export default function LandingPage() {
       <header className="relative z-10 max-w-7xl mx-auto w-full px-6 py-6 flex justify-between items-center border-b border-slate-800/80">
         <div className="flex items-center space-x-2">
           <span className="text-2xl font-black tracking-wider text-teal-400">SCHEDULA</span>
-          <span className="text-xs bg-teal-950 text-teal-300 border border-teal-800 px-2 py-0.5 rounded-full font-bold">CLINIC</span>
         </div>
       </header>
 
@@ -61,9 +60,7 @@ export default function LandingPage() {
         </div>
       </main>
 
-      <footer className="relative z-10 max-w-7xl mx-auto w-full px-6 py-6 text-center text-xs text-slate-500 border-t border-slate-800/80">
-        Schedula Clinic Management System &bull; All Rights Reserved
-      </footer>
+      
     </div>
   );
 }
