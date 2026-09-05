@@ -48,16 +48,20 @@ export default function PatientDocsPage() {
   const [filterTab, setFilterTab] = useState('Upcoming');
   const [prescriptionsMap, setPrescriptionsMap] = useState<Record<string, boolean>>({});
   
-  // Notification State with per-user key
+  // Notification State
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
 
-  // Modal State for Booking
+  // Modal State for Booking & Custom Recurrence Engine
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [activeDoctor, setActiveDoctor] = useState<Doctor | null>(null);
   const [bookingDate, setBookingDate] = useState('2026-06-10');
   const [selectedSlot, setSelectedSlot] = useState('');
-  const [recurrenceOption, setRecurrenceOption] = useState('One-time');
+  
+  const [recurrenceType, setRecurrenceType] = useState('One-time');
+  const [everyXDays, setEveryXDays] = useState(1);
+  const [everyXMonths, setEveryXMonths] = useState(1);
+
   const [successMessage, setSuccessMessage] = useState('');
 
   // Prescription View Modal State
@@ -102,7 +106,6 @@ export default function PatientDocsPage() {
     });
     setPrescriptionsMap(rxStatusMap);
 
-    // Load user-isolated notifications
     const patientKey = `patientNotifications_${currentPatient.trim().toLowerCase()}`;
     const storedNotifs: Notification[] = JSON.parse(localStorage.getItem(patientKey) || '[]');
     setNotifications(storedNotifs);
@@ -134,7 +137,9 @@ export default function PatientDocsPage() {
   const openBookingModal = (doc: Doctor) => {
     setActiveDoctor(doc);
     setSelectedSlot(doc.slots[0] || '10:00 AM');
-    setRecurrenceOption('One-time');
+    setRecurrenceType('One-time');
+    setEveryXDays(1);
+    setEveryXMonths(1);
     setIsModalOpen(true);
     setSuccessMessage('');
   };
@@ -142,6 +147,13 @@ export default function PatientDocsPage() {
   const handleConfirmBooking = (e: React.FormEvent) => {
     e.preventDefault();
     if (!activeDoctor || !selectedSlot || !bookingDate) return;
+
+    let finalRecurrenceLabel = 'One-time Consultation';
+    if (recurrenceType === 'Days') {
+      finalRecurrenceLabel = `Every ${everyXDays} Day(s)`;
+    } else if (recurrenceType === 'Months') {
+      finalRecurrenceLabel = `Every ${everyXMonths} Month(s)`;
+    }
 
     const newAppointment: Appointment = {
       id: Date.now().toString(),
@@ -152,7 +164,7 @@ export default function PatientDocsPage() {
       date: bookingDate,
       time: selectedSlot,
       status: 'Pending',
-      recurrence: recurrenceOption,
+      recurrence: finalRecurrenceLabel,
     };
 
     const allAppointments = JSON.parse(localStorage.getItem('doctorAppointments') || '[]');
@@ -161,9 +173,8 @@ export default function PatientDocsPage() {
 
     setMyAppointments(updatedAll.filter(app => app.patientName?.trim().toLowerCase() === patientName.trim().toLowerCase()));
     
-    // Add user-isolated notification
     const patientKey = `patientNotifications_${patientName.trim().toLowerCase()}`;
-    const newNotif = { id: Date.now(), text: `Booking request sent to ${activeDoctor.name}`, date: new Date().toLocaleDateString(), read: false };
+    const newNotif = { id: Date.now(), text: `Booking request sent to ${activeDoctor.name} (${finalRecurrenceLabel})`, date: new Date().toLocaleDateString(), read: false };
     const updatedNotifs = [newNotif, ...notifications];
     setNotifications(updatedNotifs);
     localStorage.setItem(patientKey, JSON.stringify(updatedNotifs));
@@ -220,7 +231,7 @@ export default function PatientDocsPage() {
   const unreadCount = notifications.filter(n => !n.read).length;
 
   const filteredAppointments = myAppointments.filter(app => {
-    if (filterTab === 'Upcoming') return app.status === 'Pending' || app.status === 'Confirmed';
+    if (filterTab === 'Upcoming') return app.status === 'Pending' || app.status === 'Confirmed' || app.status === 'Rescheduled';
     if (filterTab === 'Completed') return app.status === 'Completed';
     if (filterTab === 'Cancelled') return app.status === 'Cancelled';
     if (filterTab === 'Missed') return app.status === 'Missed';
@@ -253,7 +264,7 @@ export default function PatientDocsPage() {
             {showNotifications && (
               <div className="absolute right-0 top-12 w-80 bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl p-4 z-50 space-y-3">
                 <div className="flex justify-between items-center border-b border-slate-700 pb-2">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-teal-400">Notifications (Click to toggle read)</h3>
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-teal-400">Notifications</h3>
                   <button onClick={() => setShowNotifications(false)} className="text-slate-400 hover:text-white text-xs cursor-pointer">✕</button>
                 </div>
                 {notifications.length === 0 ? (
@@ -297,7 +308,7 @@ export default function PatientDocsPage() {
           </div>
         )}
 
-        {/* Clean Doctor Grid with Book Now Button */}
+        {/* Doctor Grid */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {doctorsList.map((doc) => (
             <div key={doc.id} className="bg-slate-800/90 border border-slate-700 p-6 rounded-2xl shadow-xl flex flex-col justify-between transition-all hover:border-teal-500/50">
@@ -345,6 +356,7 @@ export default function PatientDocsPage() {
                     <th className="py-3 px-4">Doctor</th>
                     <th className="py-3 px-4">Specialty</th>
                     <th className="py-3 px-4">Date & Time</th>
+                    <th className="py-3 px-4">Recurrence</th>
                     <th className="py-3 px-4">Status</th>
                     <th className="py-3 px-4 text-right">Actions</th>
                   </tr>
@@ -359,10 +371,12 @@ export default function PatientDocsPage() {
                         <td className="py-3.5 px-4 font-bold text-white">{app.doctorName || 'Dr. Alex Smith'}</td>
                         <td className="py-3.5 px-4 text-teal-300">{app.specialty || 'General'}</td>
                         <td className="py-3.5 px-4 text-slate-300">{app.date} at {app.time}</td>
+                        <td className="py-3.5 px-4 text-xs text-slate-400">{app.recurrence || 'One-time'}</td>
                         <td className="py-3.5 px-4">
                           <span className={`inline-block px-2.5 py-1 text-xs font-bold rounded-lg ${
                             app.status === 'Confirmed' ? 'bg-emerald-950 text-emerald-300 border border-emerald-800' :
                             app.status === 'Completed' ? 'bg-blue-950 text-blue-300 border border-blue-800' :
+                            app.status === 'Rescheduled' ? 'bg-amber-950 text-amber-300 border border-amber-800' :
                             app.status === 'Cancelled' || app.status === 'Missed' ? 'bg-red-950 text-red-300 border border-red-800' :
                             'bg-amber-950 text-amber-300 border border-amber-800'
                           }`}>
@@ -370,7 +384,7 @@ export default function PatientDocsPage() {
                           </span>
                         </td>
                         <td className="py-3.5 px-4 text-right space-x-2">
-                          {(app.status === 'Pending' || app.status === 'Confirmed') && (
+                          {(app.status === 'Pending' || app.status === 'Confirmed' || app.status === 'Rescheduled') && (
                             <button
                               onClick={() => handleCancel(app.id)}
                               className="px-3 py-1 bg-red-950/60 hover:bg-red-900 text-red-300 border border-red-800 text-xs font-bold rounded-lg transition-all cursor-pointer"
@@ -380,7 +394,6 @@ export default function PatientDocsPage() {
                           )}
                           {app.status === 'Completed' && (
                             <div className="flex items-center justify-end gap-2 flex-wrap">
-                              {/* Prescription Availability Badge & View */}
                               {hasRx ? (
                                 <button
                                   onClick={() => openPrescriptionModal(app.id)}
@@ -392,7 +405,6 @@ export default function PatientDocsPage() {
                                 <span className="text-[11px] text-amber-400 font-semibold italic">Prescription Not Available</span>
                               )}
 
-                              {/* Review Doctor */}
                               <button
                                 onClick={() => handleOpenReview(app.doctorName)}
                                 className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-teal-300 border border-slate-700 text-xs font-bold rounded-lg transition-all cursor-pointer"
@@ -400,7 +412,6 @@ export default function PatientDocsPage() {
                                 Review Doctor
                               </button>
 
-                              {/* Rebook Appointment */}
                               <button
                                 onClick={() => openBookingModal(matchedDoc)}
                                 className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg transition-all cursor-pointer"
@@ -421,7 +432,7 @@ export default function PatientDocsPage() {
 
       </div>
 
-      {/* Booking Dialog Modal */}
+      {/* Booking Dialog Modal with Custom Recurrence Engine */}
       {isModalOpen && activeDoctor && (
         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex justify-center items-center z-50 p-4">
           <div className="bg-slate-800 border border-slate-700 w-full max-w-md p-6 rounded-2xl shadow-2xl space-y-6 relative">
@@ -465,16 +476,46 @@ export default function PatientDocsPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1">Booking Recurrence</label>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1">Booking Recurrence Engine</label>
                 <select
-                  value={recurrenceOption}
-                  onChange={(e) => setRecurrenceOption(e.target.value)}
-                  className="w-full px-3 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-white text-sm focus:outline-none"
+                  value={recurrenceType}
+                  onChange={(e) => setRecurrenceType(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-white text-sm focus:outline-none mb-3"
                 >
                   <option value="One-time">One-time Consultation</option>
-                  <option value="Weekly (4 weeks)">Weekly (Repeat for 4 weeks)</option>
-                  <option value="Monthly (3 months)">Monthly (Repeat for 3 months)</option>
+                  <option value="Days">Every X Days</option>
+                  <option value="Months">Every X Months</option>
                 </select>
+
+                {recurrenceType === 'Days' && (
+                  <div>
+                    <label className="block text-[11px] text-slate-400 mb-1">Repeat every how many days? (0 - 21)</label>
+                    <select
+                      value={everyXDays}
+                      onChange={(e) => setEveryXDays(Number(e.target.value))}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs focus:outline-none"
+                    >
+                      {Array.from({ length: 22 }, (_, i) => i).map((d) => (
+                        <option key={d} value={d}>Every {d} Days</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {recurrenceType === 'Months' && (
+                  <div>
+                    <label className="block text-[11px] text-slate-400 mb-1">Repeat every how many months? (1 - 12)</label>
+                    <select
+                      value={everyXMonths}
+                      onChange={(e) => setEveryXMonths(Number(e.target.value))}
+                      className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs focus:outline-none"
+                    >
+                      {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                        <option key={m} value={m}>Every {m} Month(s)</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
 
               <div className="pt-2 flex gap-3">
@@ -583,7 +624,7 @@ export default function PatientDocsPage() {
                   <option value="4">⭐⭐⭐⭐ (4/5)</option>
                   <option value="3">⭐⭐⭐ (3/5)</option>
                   <option value="2">⭐⭐ (2/5)</option>
-                  <option value="⭐ (1/5)">⭐ (1/5)</option>
+                  <option value="1">⭐ (1/5)</option>
                 </select>
               </div>
 

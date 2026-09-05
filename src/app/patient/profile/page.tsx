@@ -306,7 +306,6 @@ export default function PatientProfilePage() {
           </div>
         </div>
       )}
-
     </div>
   );
 }
