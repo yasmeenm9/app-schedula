@@ -4,6 +4,14 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
+interface Review {
+  doctorName: string;
+  patientName: string;
+  rating: string;
+  comment: string;
+  date: string;
+}
+
 export default function DoctorProfilePage() {
   const router = useRouter();
   const [profile, setProfile] = useState({
@@ -16,21 +24,26 @@ export default function DoctorProfilePage() {
     fee: '500',
   });
 
-  const [slots, setSlots] = useState<string[]>(['10:00 AM', '11:30 AM', '02:00 PM']);
-  const [newSlot, setNewSlot] = useState('');
+  const [reviews, setReviews] = useState<Review[]>([]);
   const [savedMessage, setSavedMessage] = useState('');
 
   useEffect(() => {
     const saved = localStorage.getItem('doctorAccount');
+    let currentDocName = 'Dr. Alex Smith';
     if (saved) {
       try {
         const data = JSON.parse(saved);
+        currentDocName = data.fullName || data.name || 'Dr. Alex Smith';
         setProfile((prev) => ({ ...prev, ...data }));
-        if (data.slots) setSlots(data.slots);
       } catch (e) {
         console.error(e);
       }
     }
+
+    // Load reviews specifically for this doctor
+    const allReviews: Review[] = JSON.parse(localStorage.getItem('doctorReviews') || '[]');
+    const docReviews = allReviews.filter(r => r.doctorName?.trim().toLowerCase() === currentDocName.trim().toLowerCase());
+    setReviews(docReviews);
   }, []);
 
   const handleProfileChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
@@ -40,45 +53,16 @@ export default function DoctorProfilePage() {
   const handleSaveProfile = (e: React.FormEvent) => {
     e.preventDefault();
     const docId = profile.id || `doc-${Date.now()}`;
-    const updatedData = { ...profile, id: docId, slots, name: profile.fullName };
+    const updatedData = { ...profile, id: docId, name: profile.fullName };
     
-    // Update active account
     localStorage.setItem('doctorAccount', JSON.stringify(updatedData));
 
-    // Update in registeredDoctors array safely by matching email or id
     const existingDocs = JSON.parse(localStorage.getItem('registeredDoctors') || '[]');
     const filteredDocs = existingDocs.filter((d: any) => d.email !== profile.email && d.id !== docId);
-    const updatedDocsList = [updatedData, ...filteredDocs];
-    localStorage.setItem('registeredDoctors', JSON.stringify(updatedDocsList));
+    localStorage.setItem('registeredDoctors', JSON.stringify([updatedData, ...filteredDocs]));
 
-    setSavedMessage('Profile and availability slots successfully updated!');
+    setSavedMessage('Profile information successfully updated!');
     setTimeout(() => setSavedMessage(''), 3000);
-  };
-
-  const handleAddSlot = () => {
-    if (!newSlot || slots.includes(newSlot)) return;
-    const updatedSlots = [...slots, newSlot];
-    setSlots(updatedSlots);
-    setNewSlot('');
-    
-    const updatedData = { ...profile, slots: updatedSlots, name: profile.fullName };
-    localStorage.setItem('doctorAccount', JSON.stringify(updatedData));
-
-    const existingDocs = JSON.parse(localStorage.getItem('registeredDoctors') || '[]');
-    const filteredDocs = existingDocs.filter((d: any) => d.email !== profile.email);
-    localStorage.setItem('registeredDoctors', JSON.stringify([updatedData, ...filteredDocs]));
-  };
-
-  const handleRemoveSlot = (slotToRemove: string) => {
-    const updatedSlots = slots.filter((s) => s !== slotToRemove);
-    setSlots(updatedSlots);
-
-    const updatedData = { ...profile, slots: updatedSlots, name: profile.fullName };
-    localStorage.setItem('doctorAccount', JSON.stringify(updatedData));
-
-    const existingDocs = JSON.parse(localStorage.getItem('registeredDoctors') || '[]');
-    const filteredDocs = existingDocs.filter((d: any) => d.email !== profile.email);
-    localStorage.setItem('registeredDoctors', JSON.stringify([updatedData, ...filteredDocs]));
   };
 
   const handleSignOut = () => {
@@ -92,8 +76,8 @@ export default function DoctorProfilePage() {
         
         <div className="flex justify-between items-center border-b border-slate-800 pb-6">
           <div>
-            <h1 className="text-3xl font-black text-teal-400">Doctor Profile & Slot Manager</h1>
-            <p className="text-sm text-slate-400">Manage your professional credentials and active consultation availability.</p>
+            <h1 className="text-3xl font-black text-teal-400">Doctor Profile & Portfolio</h1>
+            <p className="text-sm text-slate-400">Manage your credentials and view patient feedback.</p>
           </div>
           <div className="flex items-center gap-3">
             <Link href="/doctor/dashboard" className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-teal-300 rounded-xl text-xs font-bold transition-all border border-slate-700">
@@ -102,7 +86,7 @@ export default function DoctorProfilePage() {
             <Link href="/doctor/appointments" className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-teal-300 rounded-xl text-xs font-bold transition-all border border-slate-700">
               Appointments
             </Link>
-            <button onClick={handleSignOut} className="px-4 py-2 bg-red-950/60 hover:bg-red-900 text-red-300 rounded-xl text-xs font-bold transition-all border border-red-800">
+            <button onClick={handleSignOut} className="px-4 py-2 bg-red-950/60 hover:bg-red-900 text-red-300 rounded-xl text-xs font-bold transition-all border border-red-800 cursor-pointer">
               Sign Out
             </button>
           </div>
@@ -114,6 +98,7 @@ export default function DoctorProfilePage() {
           </div>
         )}
 
+        {/* Profile Edit Form */}
         <form onSubmit={handleSaveProfile} className="space-y-6 bg-slate-800/90 border border-slate-700 p-8 rounded-2xl shadow-xl">
           <h2 className="text-xl font-bold text-white border-b border-slate-700 pb-3">Professional Information</h2>
 
@@ -149,41 +134,32 @@ export default function DoctorProfilePage() {
             </div>
           </div>
 
-          <div className="pt-6 border-t border-slate-700 space-y-4">
-            <h3 className="text-lg font-bold text-teal-400">Appointment Availability / Slots</h3>
-            <p className="text-xs text-slate-400">Add recurring time slots that will instantly show up on the user portal for booking.</p>
-
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={newSlot}
-                onChange={(e) => setNewSlot(e.target.value)}
-                placeholder="e.g. 03:30 PM"
-                className="flex-1 px-3 py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-white text-sm focus:outline-none"
-              />
-              <button
-                type="button"
-                onClick={handleAddSlot}
-                className="px-5 py-2.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold rounded-xl transition-all shadow-lg"
-              >
-                Add Slot
-              </button>
-            </div>
-
-            <div className="flex flex-wrap gap-2 pt-2">
-              {slots.map((slot) => (
-                <div key={slot} className="flex items-center gap-2 px-3 py-1.5 bg-slate-900 border border-slate-700 rounded-xl text-xs font-bold text-slate-300">
-                  <span>{slot}</span>
-                  <button type="button" onClick={() => handleRemoveSlot(slot)} className="text-red-400 hover:text-red-300 ml-1">×</button>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <button type="submit" className="w-full py-3.5 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-xl text-sm shadow-lg transition-all mt-4">
+          <button type="submit" className="w-full py-3.5 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-xl text-sm shadow-lg transition-all mt-4 cursor-pointer">
             Save All Changes
           </button>
         </form>
+
+        {/* Patient Reviews Section */}
+        <div className="bg-slate-800/90 border border-slate-700 p-8 rounded-2xl shadow-xl space-y-6">
+          <h2 className="text-xl font-bold text-teal-400 border-b border-slate-700 pb-3">⭐ Patient Reviews & Testimonials</h2>
+
+          {reviews.length === 0 ? (
+            <p className="text-sm text-slate-400 italic">No patient reviews received yet.</p>
+          ) : (
+            <div className="space-y-4">
+              {reviews.map((rev, idx) => (
+                <div key={idx} className="p-4 bg-slate-900 border border-slate-700 rounded-xl space-y-2">
+                  <div className="flex justify-between items-center">
+                    <span className="font-bold text-white text-sm">{rev.patientName}</span>
+                    <span className="text-xs text-teal-400 font-semibold">{rev.rating}</span>
+                  </div>
+                  <p className="text-xs text-slate-300">{rev.comment}</p>
+                  <span className="text-[10px] text-slate-500 block">{rev.date}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
       </div>
     </div>

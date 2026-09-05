@@ -16,7 +16,22 @@ export default function PatientLoginPage() {
       setError('Please fill in all fields.');
       return;
     }
-    // Route patient to appointment availability portal
+
+    // Derive the patient's name from their email handle (e.g., mark.james -> Mark James)
+    const username = email.split('@')[0];
+    const formattedName = username
+      .split(/[._-]/)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ');
+
+    // Save the correct active user profile to localStorage
+    const patientSession = {
+      email,
+      fullName: formattedName || 'Patient User',
+    };
+    localStorage.setItem('patientAccount', JSON.stringify(patientSession));
+
+    // Route patient to appointment portal
     router.push('/docs');
   };
 
@@ -57,7 +72,7 @@ export default function PatientLoginPage() {
               />
             </div>
 
-            <button type="submit" className="w-full py-3.5 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-xl text-sm shadow-lg transition-all mt-2">
+            <button type="submit" className="w-full py-3.5 bg-teal-600 hover:bg-teal-700 text-white font-bold rounded-xl text-sm shadow-lg transition-all mt-2 cursor-pointer">
               Sign In as Patient
             </button>
           </form>
