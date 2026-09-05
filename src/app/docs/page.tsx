@@ -200,6 +200,15 @@ export default function PatientDocsPage() {
     setMyAppointments(updatedAll.filter((app: Appointment) => app.patientName?.trim().toLowerCase() === patientName.trim().toLowerCase()));
   };
 
+  const updateAppointmentStatus = (id: string, newStatus: string) => {
+    const allAppointments = JSON.parse(localStorage.getItem('doctorAppointments') || '[]');
+    const updatedAll = allAppointments.map((app: Appointment) => app.id === id ? { ...app, status: newStatus } : app);
+    localStorage.setItem('doctorAppointments', JSON.stringify(updatedAll));
+    setMyAppointments(updatedAll.filter((app: Appointment) => app.patientName?.trim().toLowerCase() === patientName.trim().toLowerCase()));
+    setSuccessMessage(`Appointment status updated to ${newStatus}`);
+    setTimeout(() => setSuccessMessage(''), 3000);
+  };
+
   const openPrescriptionModal = (appointmentId: string) => {
     const allPrescriptions: Prescription[] = JSON.parse(localStorage.getItem('doctorPrescriptions') || '[]');
     const foundRx = allPrescriptions.find(rx => rx.appointmentId === appointmentId);
@@ -384,13 +393,29 @@ export default function PatientDocsPage() {
                           </span>
                         </td>
                         <td className="py-3.5 px-4 text-right space-x-2">
-                          {(app.status === 'Pending' || app.status === 'Confirmed' || app.status === 'Rescheduled') && (
+                          {(app.status === 'Pending' || app.status === 'Confirmed') && (
                             <button
                               onClick={() => handleCancel(app.id)}
                               className="px-3 py-1 bg-red-950/60 hover:bg-red-900 text-red-300 border border-red-800 text-xs font-bold rounded-lg transition-all cursor-pointer"
                             >
                               Cancel
                             </button>
+                          )}
+                          {app.status === 'Rescheduled' && (
+                            <>
+                              <button
+                                onClick={() => updateAppointmentStatus(app.id, 'Confirmed')}
+                                className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg transition-all cursor-pointer"
+                              >
+                                Accept New Slot
+                              </button>
+                              <button
+                                onClick={() => handleCancel(app.id)}
+                                className="px-3 py-1 bg-red-950/60 hover:bg-red-900 text-red-300 border border-red-800 text-xs font-bold rounded-lg transition-all cursor-pointer"
+                              >
+                                Decline
+                              </button>
+                            </>
                           )}
                           {app.status === 'Completed' && (
                             <div className="flex items-center justify-end gap-2 flex-wrap">
