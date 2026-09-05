@@ -85,7 +85,6 @@ export default function DoctorAppointmentsPage() {
   const openRxModal = (app: Appointment) => {
     setSelectedAppForRx(app);
     
-    // Check if prescription actually exists in localStorage
     const existingRxList = JSON.parse(localStorage.getItem('doctorPrescriptions') || '[]');
     const found = existingRxList.find((rx: any) => rx.appointmentId === app.id);
     
@@ -237,7 +236,6 @@ export default function DoctorAppointmentsPage() {
                 </thead>
                 <tbody className="divide-y divide-slate-700/50">
                   {filteredAppointments.map((app) => {
-                    // Check if prescription already exists for this appointment
                     const hasRx = JSON.parse(localStorage.getItem('doctorPrescriptions') || '[]').some((rx: any) => rx.appointmentId === app.id);
 
                     return (
@@ -268,6 +266,12 @@ export default function DoctorAppointmentsPage() {
                               <button onClick={() => updateStatus(app.id, 'Completed')} className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg cursor-pointer">Complete</button>
                               <button onClick={() => updateStatus(app.id, 'Missed')} className="px-3 py-1 bg-amber-950 hover:bg-amber-900 text-amber-300 border border-amber-800 text-xs font-bold rounded-lg cursor-pointer">Missed</button>
                               <button onClick={() => openRescheduleModal(app)} className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-lg cursor-pointer">Reschedule</button>
+                            </>
+                          )}
+                          {app.status === 'Rescheduled' && (
+                            <>
+                              <button onClick={() => updateStatus(app.id, 'Confirmed')} className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg cursor-pointer">Confirm</button>
+                              <button onClick={() => updateStatus(app.id, 'Completed')} className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg cursor-pointer">Complete</button>
                             </>
                           )}
                           {app.status === 'Completed' && (
