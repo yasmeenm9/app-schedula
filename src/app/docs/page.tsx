@@ -6,6 +6,7 @@ import Link from 'next/link';
 interface Appointment {
   id: string;
   patientName: string;
+  doctorId?: string;
   doctorName?: string;
   specialty?: string;
   date: string;
@@ -28,39 +29,40 @@ export default function PatientDocsPage() {
   const [successMessage, setSuccessMessage] = useState('');
   const [myAppointments, setMyAppointments] = useState<Appointment[]>([]);
   const [doctorsList, setDoctorsList] = useState<Doctor[]>([]);
+  const [filterTab, setFilterTab] = useState('Upcoming');
 
-  // Base hardcoded doctors
   const defaultDoctors: Doctor[] = [
-    { id: 'doc-2', name: 'Dr. Sarah Jenkins', specialty: 'Dermatology', fee: 400, slots: ['09:30 AM', '01:00 PM', '04:30 PM'] },
-    { id: 'doc-3', name: 'Dr. Robert Chen', specialty: 'Pediatrics', fee: 600, slots: ['11:00 AM', '03:00 PM', '05:00 PM'] },
+    { id: 'doc-default-2', name: 'Dr. Sarah Jenkins', specialty: 'Dermatology', fee: 400, slots: ['09:30 AM', '01:00 PM', '04:30 PM'] },
+    { id: 'doc-default-3', name: 'Dr. Robert Chen', specialty: 'Pediatrics', fee: 600, slots: ['11:00 AM', '03:00 PM', '05:00 PM'] },
   ];
 
   useEffect(() => {
-    // 1. Load patient account info gracefully
     const saved = localStorage.getItem('patientAccount');
+    let currentPatient = 'John Doe';
     if (saved) {
       try {
         const data = JSON.parse(saved);
-        if (data.fullName) setPatientName(data.fullName);
+        if (data.fullName) {
+          setPatientName(data.fullName);
+          currentPatient = data.fullName;
+        }
       } catch (e) {
-        console.error('Failed to parse patient account', e);
+        console.error(e);
       }
     }
 
-    // 2. Load existing appointments
-    const storedAppointments = JSON.parse(localStorage.getItem('doctorAppointments') || '[]');
-    setMyAppointments(storedAppointments);
+    const storedAppointments: Appointment[] = JSON.parse(localStorage.getItem('doctorAppointments') || '[]');
+    setMyAppointments(storedAppointments.filter(app => app.patientName?.trim().toLowerCase() === currentPatient.trim().toLowerCase()));
 
-    // 3. Robustly load registered doctors from all possible storage formats
+    // Load all registered doctors safely with unique IDs
     let loadedDynamicDoctors: Doctor[] = [];
-
-    const savedDoctorsArray = localStorage.getItem('registeredDoctors') || localStorage.getItem('allDoctors') || localStorage.getItem('doctorsList');
+    const savedDoctorsArray = localStorage.getItem('registeredDoctors');
     if (savedDoctorsArray) {
       try {
         const parsedArray = JSON.parse(savedDoctorsArray);
         if (Array.isArray(parsedArray)) {
           loadedDynamicDoctors = parsedArray.map((doc: any, idx: number) => ({
-            id: doc.id || `doc-reg-${idx}`,
+            id: doc.id || `doc-reg-${idx}-${doc.email || idx}`,
             name: doc.fullName || doc.name,
             specialty: doc.specialty || 'General Medicine',
             fee: Number(doc.fee) || 500,
@@ -68,31 +70,13 @@ export default function PatientDocsPage() {
           }));
         }
       } catch (e) {
-        console.error('Failed to parse doctors array', e);
+        console.error(e);
       }
     }
 
-    if (loadedDynamicDoctors.length === 0) {
-      const savedDoctorAccount = localStorage.getItem('doctorAccount');
-      if (savedDoctorAccount) {
-        try {
-          const docData = JSON.parse(savedDoctorAccount);
-          if (docData.fullName || docData.name) {
-            loadedDynamicDoctors.push({
-              id: 'doc-registered',
-              name: docData.fullName || docData.name,
-              specialty: docData.specialty || 'General Medicine',
-              fee: Number(docData.fee) || 500,
-              slots: docData.slots || ['10:00 AM', '02:00 PM', '04:00 PM'],
-            });
-          }
-        } catch (e) {
-          console.error('Failed to parse doctor account', e);
-        }
-      }
-    }
-
-    setDoctorsList([...defaultDoctors, ...loadedDynamicDoctors]);
+    const combined = [...defaultDoctors, ...loadedDynamicDoctors];
+    const uniqueDoctors = Array.from(new Map(combined.map(d => [d.id, d])).values());
+    setDoctorsList(uniqueDoctors);
   }, []);
 
   const handleBooking = () => {
@@ -102,6 +86,7 @@ export default function PatientDocsPage() {
     const newAppointment: Appointment = {
       id: Date.now().toString(),
       patientName,
+      doctorId: doc?.id,
       doctorName: doc?.name,
       specialty: doc?.specialty,
       date: '2026-06-10',
@@ -109,26 +94,35 @@ export default function PatientDocsPage() {
       status: 'Pending',
     };
 
-    const updatedAppointments = [newAppointment, ...myAppointments];
-    setMyAppointments(updatedAppointments);
-    localStorage.setItem('doctorAppointments', JSON.stringify(updatedAppointments));
+    const allAppointments = JSON.parse(localStorage.getItem('doctorAppointments') || '[]');
+    const updatedAll = [newAppointment, ...allAppointments];
+    localStorage.setItem('doctorAppointments', JSON.stringify(updatedAll));
 
+    setMyAppointments(updatedAll.filter(app => app.patientName?.trim().toLowerCase() === patientName.trim().toLowerCase()));
     setSuccessMessage(`Appointment successfully booked with ${doc?.name} for ${selectedSlot}!`);
     setSelectedDoctor(null);
     setSelectedSlot(null);
   };
 
   const handleCancel = (id: string) => {
-    const updated = myAppointments.filter((app) => app.id !== id);
-    setMyAppointments(updated);
-    localStorage.setItem('doctorAppointments', JSON.stringify(updated));
+    const allAppointments = JSON.parse(localStorage.getItem('doctorAppointments') || '[]');
+    const updatedAll = allAppointments.map((app: Appointment) => app.id === id ? { ...app, status: 'Cancelled' } : app);
+    localStorage.setItem('doctorAppointments', JSON.stringify(updatedAll));
+    setMyAppointments(updatedAll.filter((app: Appointment) => app.patientName?.trim().toLowerCase() === patientName.trim().toLowerCase()));
   };
+
+  const filteredAppointments = myAppointments.filter(app => {
+    if (filterTab === 'Upcoming') return app.status === 'Pending' || app.status === 'Confirmed';
+    if (filterTab === 'Completed') return app.status === 'Completed';
+    if (filterTab === 'Cancelled') return app.status === 'Cancelled';
+    if (filterTab === 'Missed') return app.status === 'Missed';
+    return true;
+  });
 
   return (
     <div className="min-h-screen bg-slate-900 text-white p-6 sm:p-10">
       <div className="max-w-5xl mx-auto space-y-8">
         
-        {/* Header */}
         <div className="flex justify-between items-center border-b border-slate-800 pb-6">
           <div>
             <h1 className="text-3xl font-black text-teal-400">Patient Booking Portal</h1>
@@ -150,7 +144,7 @@ export default function PatientDocsPage() {
           </div>
         )}
 
-        {/* Doctors Grid */}
+        {/* Doctor Grid Selection */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {doctorsList.map((doc) => (
             <div key={doc.id} className={`bg-slate-800/90 border p-6 rounded-2xl shadow-xl flex flex-col justify-between transition-all ${selectedDoctor === doc.id ? 'border-teal-400 ring-2 ring-teal-500/40' : 'border-slate-700'}`}>
@@ -185,12 +179,25 @@ export default function PatientDocsPage() {
           ))}
         </div>
 
-        {/* My Booked Appointments Section */}
-        <div className="bg-slate-800/90 border border-slate-700 p-6 rounded-2xl shadow-xl space-y-4 mt-8">
-          <h2 className="text-lg font-bold text-teal-400">My Booked Appointments</h2>
+        {/* My Appointments with Tabs */}
+        <div className="bg-slate-800/90 border border-slate-700 p-6 rounded-2xl shadow-xl space-y-6 mt-8">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+            <h2 className="text-lg font-bold text-teal-400">My Appointments</h2>
+            <div className="flex flex-wrap gap-2">
+              {['Upcoming', 'Completed', 'Cancelled', 'Missed'].map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setFilterTab(tab)}
+                  className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all ${filterTab === tab ? 'bg-teal-500 text-slate-950 shadow-md' : 'bg-slate-900 text-slate-300 border border-slate-700 hover:border-teal-500'}`}
+                >
+                  {tab}
+                </button>
+              ))}
+            </div>
+          </div>
 
-          {myAppointments.length === 0 ? (
-            <p className="text-sm text-slate-400">You have no upcoming appointment reservations.</p>
+          {filteredAppointments.length === 0 ? (
+            <p className="text-sm text-slate-400">No {filterTab.toLowerCase()} appointments found.</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse text-sm">
@@ -204,23 +211,33 @@ export default function PatientDocsPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-700/50">
-                  {myAppointments.map((app) => (
+                  {filteredAppointments.map((app) => (
                     <tr key={app.id} className="hover:bg-slate-900/40 transition-all">
-                      <td className="py-3.5 px-4 font-bold text-white">{app.doctorName}</td>
-                      <td className="py-3.5 px-4 text-teal-300">{app.specialty}</td>
+                      <td className="py-3.5 px-4 font-bold text-white">{app.doctorName || 'Dr. Alex Smith'}</td>
+                      <td className="py-3.5 px-4 text-teal-300">{app.specialty || 'General'}</td>
                       <td className="py-3.5 px-4 text-slate-300">{app.date} at {app.time}</td>
                       <td className="py-3.5 px-4">
-                        <span className={`inline-block px-2.5 py-1 text-xs font-bold rounded-lg ${app.status === 'Confirmed' ? 'bg-emerald-950 text-emerald-300 border border-emerald-800' : 'bg-amber-950 text-amber-300 border border-amber-800'}`}>
+                        <span className={`inline-block px-2.5 py-1 text-xs font-bold rounded-lg ${
+                          app.status === 'Confirmed' ? 'bg-emerald-950 text-emerald-300 border border-emerald-800' :
+                          app.status === 'Completed' ? 'bg-blue-950 text-blue-300 border border-blue-800' :
+                          app.status === 'Cancelled' || app.status === 'Missed' ? 'bg-red-950 text-red-300 border border-red-800' :
+                          'bg-amber-950 text-amber-300 border border-amber-800'
+                        }`}>
                           {app.status}
                         </span>
                       </td>
                       <td className="py-3.5 px-4 text-right">
-                        <button
-                          onClick={() => handleCancel(app.id)}
-                          className="px-3 py-1 bg-red-950/60 hover:bg-red-900 text-red-300 border border-red-800 text-xs font-bold rounded-lg transition-all"
-                        >
-                          Cancel
-                        </button>
+                        {(app.status === 'Pending' || app.status === 'Confirmed') && (
+                          <button
+                            onClick={() => handleCancel(app.id)}
+                            className="px-3 py-1 bg-red-950/60 hover:bg-red-900 text-red-300 border border-red-800 text-xs font-bold rounded-lg transition-all"
+                          >
+                            Cancel
+                          </button>
+                        )}
+                        {app.status === 'Completed' && (
+                          <span className="text-xs text-teal-400 font-semibold">Prescription Available</span>
+                        )}
                       </td>
                     </tr>
                   ))}

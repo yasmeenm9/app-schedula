@@ -21,20 +21,23 @@ export default function DoctorDashboard() {
   useEffect(() => {
     localStorage.setItem('currentDoctorSession', 'true');
     const savedDoc = localStorage.getItem('doctorAccount');
+    let resolvedName = 'Dr. Alex Smith';
     if (savedDoc) {
       try {
         const data = JSON.parse(savedDoc);
-        const resolvedName = data.fullName || data.name || (data.email ? data.email.split('@')[0] : null);
-        if (resolvedName) {
-          setDoctorName(resolvedName);
-        }
+        resolvedName = data.fullName || data.name || (data.email ? data.email.split('@')[0] : 'Dr. Alex Smith');
+        setDoctorName(resolvedName);
       } catch (e) {
-        console.error('Failed to parse doctor account', e);
+        console.error(e);
       }
     }
 
-    const storedAppointments = JSON.parse(localStorage.getItem('doctorAppointments') || '[]');
-    setAppointments(storedAppointments);
+    // Load and filter appointments strictly for this doctor
+    const storedAppointments: Appointment[] = JSON.parse(localStorage.getItem('doctorAppointments') || '[]');
+    const filtered = storedAppointments.filter(app => 
+      !app.doctorName || app.doctorName.trim().toLowerCase() === resolvedName.trim().toLowerCase()
+    );
+    setAppointments(filtered);
   }, []);
 
   const handleSignOut = () => {
@@ -43,9 +46,14 @@ export default function DoctorDashboard() {
   };
 
   const updateStatus = (id: string, newStatus: string) => {
-    const updated = appointments.map((app) => (app.id === id ? { ...app, status: newStatus } : app));
-    setAppointments(updated);
-    localStorage.setItem('doctorAppointments', JSON.stringify(updated));
+    const allAppointments: Appointment[] = JSON.parse(localStorage.getItem('doctorAppointments') || '[]');
+    const updatedAll = allAppointments.map((app) => (app.id === id ? { ...app, status: newStatus } : app));
+    localStorage.setItem('doctorAppointments', JSON.stringify(updatedAll));
+
+    const filtered = updatedAll.filter(app => 
+      !app.doctorName || app.doctorName.trim().toLowerCase() === doctorName.trim().toLowerCase()
+    );
+    setAppointments(filtered);
 
     const notifications = JSON.parse(localStorage.getItem('patientNotifications') || '[]');
     localStorage.setItem('patientNotifications', JSON.stringify([
@@ -62,7 +70,6 @@ export default function DoctorDashboard() {
     <div className="min-h-screen bg-slate-900 text-white p-6 sm:p-10">
       <div className="max-w-6xl mx-auto space-y-8">
         
-        {/* Header */}
         <div className="flex justify-between items-center border-b border-slate-800 pb-6">
           <div>
             <h1 className="text-3xl font-black text-teal-400">Doctor Dashboard</h1>
@@ -84,7 +91,6 @@ export default function DoctorDashboard() {
           </div>
         </div>
 
-        {/* Metrics Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
           <div className="bg-slate-800/90 border border-slate-700 p-6 rounded-2xl shadow-xl">
             <p className="text-xs uppercase font-bold text-slate-400 mb-1">Total Bookings</p>
@@ -100,12 +106,11 @@ export default function DoctorDashboard() {
           </div>
         </div>
 
-        {/* Upcoming Appointments Queue */}
         <div className="bg-slate-800/90 border border-slate-700 p-6 rounded-2xl shadow-xl space-y-4">
           <h2 className="text-lg font-bold text-teal-400">Upcoming Patient Appointments</h2>
 
           {appointments.length === 0 ? (
-            <p className="text-sm text-slate-400">No patient bookings registered yet.</p>
+            <p className="text-sm text-slate-400">No patient bookings registered yet for {doctorName}.</p>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse text-sm">

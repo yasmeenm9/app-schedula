@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 export default function DoctorProfilePage() {
   const router = useRouter();
   const [profile, setProfile] = useState({
+    id: '',
     fullName: 'Dr. Alex Smith',
     email: 'doctor@schedula.com',
     phone: '9876543210',
@@ -20,7 +21,6 @@ export default function DoctorProfilePage() {
   const [savedMessage, setSavedMessage] = useState('');
 
   useEffect(() => {
-    localStorage.setItem('currentDoctorSession', 'true');
     const saved = localStorage.getItem('doctorAccount');
     if (saved) {
       try {
@@ -28,7 +28,7 @@ export default function DoctorProfilePage() {
         setProfile((prev) => ({ ...prev, ...data }));
         if (data.slots) setSlots(data.slots);
       } catch (e) {
-        console.error('Failed to parse doctor account', e);
+        console.error(e);
       }
     }
   }, []);
@@ -39,13 +39,16 @@ export default function DoctorProfilePage() {
 
   const handleSaveProfile = (e: React.FormEvent) => {
     e.preventDefault();
-    const updatedData = { ...profile, slots, name: profile.fullName };
+    const docId = profile.id || `doc-${Date.now()}`;
+    const updatedData = { ...profile, id: docId, slots, name: profile.fullName };
     
+    // Update active account
     localStorage.setItem('doctorAccount', JSON.stringify(updatedData));
 
+    // Update in registeredDoctors array safely by matching email or id
     const existingDocs = JSON.parse(localStorage.getItem('registeredDoctors') || '[]');
-    const filteredDocs = existingDocs.filter((d: any) => d.email !== profile.email);
-    const updatedDocsList = [{ id: 'doc-registered', ...updatedData }, ...filteredDocs];
+    const filteredDocs = existingDocs.filter((d: any) => d.email !== profile.email && d.id !== docId);
+    const updatedDocsList = [updatedData, ...filteredDocs];
     localStorage.setItem('registeredDoctors', JSON.stringify(updatedDocsList));
 
     setSavedMessage('Profile and availability slots successfully updated!');
@@ -63,7 +66,7 @@ export default function DoctorProfilePage() {
 
     const existingDocs = JSON.parse(localStorage.getItem('registeredDoctors') || '[]');
     const filteredDocs = existingDocs.filter((d: any) => d.email !== profile.email);
-    localStorage.setItem('registeredDoctors', JSON.stringify([{ id: 'doc-registered', ...updatedData }, ...filteredDocs]));
+    localStorage.setItem('registeredDoctors', JSON.stringify([updatedData, ...filteredDocs]));
   };
 
   const handleRemoveSlot = (slotToRemove: string) => {
@@ -75,7 +78,7 @@ export default function DoctorProfilePage() {
 
     const existingDocs = JSON.parse(localStorage.getItem('registeredDoctors') || '[]');
     const filteredDocs = existingDocs.filter((d: any) => d.email !== profile.email);
-    localStorage.setItem('registeredDoctors', JSON.stringify([{ id: 'doc-registered', ...updatedData }, ...filteredDocs]));
+    localStorage.setItem('registeredDoctors', JSON.stringify([updatedData, ...filteredDocs]));
   };
 
   const handleSignOut = () => {
@@ -87,7 +90,6 @@ export default function DoctorProfilePage() {
     <div className="min-h-screen bg-slate-900 text-white p-6 sm:p-10">
       <div className="max-w-4xl mx-auto space-y-8">
         
-        {/* Header */}
         <div className="flex justify-between items-center border-b border-slate-800 pb-6">
           <div>
             <h1 className="text-3xl font-black text-teal-400">Doctor Profile & Slot Manager</h1>
@@ -147,7 +149,6 @@ export default function DoctorProfilePage() {
             </div>
           </div>
 
-          {/* Slot Manager Section */}
           <div className="pt-6 border-t border-slate-700 space-y-4">
             <h3 className="text-lg font-bold text-teal-400">Appointment Availability / Slots</h3>
             <p className="text-xs text-slate-400">Add recurring time slots that will instantly show up on the user portal for booking.</p>

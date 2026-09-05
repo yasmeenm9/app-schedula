@@ -44,8 +44,22 @@ export default function DoctorSignupPage() {
       return;
     }
 
-    localStorage.setItem('doctorAccount', JSON.stringify(formData));
-    router.push('/login/doctor');
+    const newDoctor = {
+      id: `doc-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+      ...formData,
+      slots: ['10:00 AM', '02:00 PM', '04:00 PM'],
+    };
+
+    // 1. Append to registeredDoctors array so login checks can find it
+    const existingDoctors = JSON.parse(localStorage.getItem('registeredDoctors') || '[]');
+    const updatedList = [newDoctor, ...existingDoctors];
+    localStorage.setItem('registeredDoctors', JSON.stringify(updatedList));
+
+    // 2. Set active account and session
+    localStorage.setItem('doctorAccount', JSON.stringify(newDoctor));
+    localStorage.setItem('currentDoctorSession', 'true');
+
+    router.push('/doctor/dashboard');
   };
 
   return (
